@@ -6,6 +6,7 @@ import '../models/reminder_settings.dart';
 class SettingsRepository {
   static const _defaultOffsetKey = 'default_offset_minutes';
   static const _alarmBehaviorKey = 'alarm_behavior';
+  static const _microsoftClientIdKey = 'microsoft_client_id';
 
   Future<ReminderSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -14,6 +15,7 @@ class SettingsRepository {
       alarmBehavior: AlarmBehavior.fromName(
         preferences.getString(_alarmBehaviorKey),
       ),
+      microsoftClientId: preferences.getString(_microsoftClientIdKey) ?? '',
     );
   }
 
@@ -24,6 +26,10 @@ class SettingsRepository {
       settings.defaultReminderOffsetMinutes,
     );
     await preferences.setString(_alarmBehaviorKey, settings.alarmBehavior.name);
+    await preferences.setString(
+      _microsoftClientIdKey,
+      settings.microsoftClientId.trim(),
+    );
     return settings;
   }
 }

@@ -23,7 +23,11 @@ class ScreenshotAnalyzer {
       final inputImage = InputImage.fromFilePath(imagePath);
       final recognizedText = await textRecognizer.processImage(inputImage);
       final textLines = _extractTextLines(recognizedText);
-      final eventBlocks = await _detectEventBlocks(imagePath, textLines);
+      final eventBlocks = await _refineEventBlocksWithZoomedOcr(
+        imagePath: imagePath,
+        eventBlocks: await _detectEventBlocks(imagePath, textLines),
+        textRecognizer: textRecognizer,
+      );
       final parserCandidates = await _parseWithLlama(
         textLines: textLines,
         eventBlocks: eventBlocks,
@@ -125,6 +129,131 @@ class ScreenshotAnalyzer {
     });
 
     return _deduplicateEventBlocks(blocks);
+  }
+
+  Future<List<_EventBlock>> _refineEventBlocksWithZoomedOcr({
+    required String imagePath,
+    required List<_EventBlock> eventBlocks,
+    required TextRecognizer textRecognizer,
+  }) async {
+    if (eventBlocks.isEmpty) {
+      return eventBlocks;
+    }
+
+    final bytes = await File(imagePath).readAsBytes();
+    final image = img.decodeImage(bytes);
+    if (image == null) {
+      return eventBlocks;
+    }
+
+    final refined = <_EventBlock>[];
+    for (var index = 0; index < eventBlocks.length; index += 1) {
+      final block = eventBlocks[index];
+      final zoomedLines = await _ocrZoomedEventBlock(
+        image: image,
+        block: block,
+        index: index,
+        textRecognizer: textRecognizer,
+      );
+      refined.add(
+        zoomedLines.isEmpty
+            ? block
+            : _EventBlock(
+                rect: block.rect,
+                lines: _mergeBlockLines(zoomedLines, block.lines),
+              ),
+      );
+    }
+
+    return refined;
+  }
+
+  List<_TextLineInfo> _mergeBlockLines(
+    List<_TextLineInfo> primary,
+    List<_TextLineInfo> fallback,
+  ) {
+    final merged = <_TextLineInfo>[];
+    for (final line in [...primary, ...fallback]) {
+      final cleaned = _cleanMeetingTitle(line.text).toLowerCase();
+      if (cleaned.isEmpty) {
+        continue;
+      }
+      final exists = merged.any((item) {
+        return _cleanMeetingTitle(item.text).toLowerCase() == cleaned;
+      });
+      if (!exists) {
+        merged.add(line);
+      }
+    }
+    return merged;
+  }
+
+  Future<List<_TextLineInfo>> _ocrZoomedEventBlock({
+    required img.Image image,
+    required _EventBlock block,
+    required int index,
+    required TextRecognizer textRecognizer,
+  }) async {
+    const scale = 3;
+    final cropRect = _clampedCropRect(
+      block.rect,
+      image.width,
+      image.height,
+    );
+    if (cropRect.width < 16 || cropRect.height < 8) {
+      return [];
+    }
+
+    final crop = img.copyCrop(
+      image,
+      x: cropRect.left.round(),
+      y: cropRect.top.round(),
+      width: cropRect.width.round(),
+      height: cropRect.height.round(),
+    );
+    final zoomed = img.copyResize(
+      crop,
+      width: crop.width * scale,
+      height: crop.height * scale,
+      interpolation: img.Interpolation.cubic,
+    );
+
+    final tempFile = File(
+      '${Directory.systemTemp.path}/snap_reminder_event_${DateTime.now().microsecondsSinceEpoch}_$index.png',
+    );
+    try {
+      await tempFile.writeAsBytes(img.encodePng(zoomed), flush: true);
+      final recognizedText = await textRecognizer.processImage(
+        InputImage.fromFilePath(tempFile.path),
+      );
+      final lines = _extractTextLines(recognizedText)
+          .map((line) {
+            final rect = Rect.fromLTRB(
+              cropRect.left + line.rect.left / scale,
+              cropRect.top + line.rect.top / scale,
+              cropRect.left + line.rect.right / scale,
+              cropRect.top + line.rect.bottom / scale,
+            );
+            return _TextLineInfo(text: line.text, rect: rect);
+          })
+          .where((line) => line.text.trim().isNotEmpty)
+          .toList();
+      final usefulLines =
+          lines.where((line) => !_looksLikeNonEventLine(line.text)).toList();
+      return usefulLines;
+    } finally {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+    }
+  }
+
+  Rect _clampedCropRect(Rect rect, int imageWidth, int imageHeight) {
+    final left = max(0.0, rect.left - 2);
+    final top = max(0.0, rect.top - 2);
+    final right = min(imageWidth.toDouble(), rect.right + 2);
+    final bottom = min(imageHeight.toDouble(), rect.bottom + 2);
+    return Rect.fromLTRB(left, top, max(left + 1, right), max(top + 1, bottom));
   }
 
   Rect _estimateGridBounds(
@@ -424,10 +553,7 @@ class ScreenshotAnalyzer {
     final candidates = <MeetingCandidate>[];
 
     for (final block in eventBlocks) {
-      final titleLine = block.lines.firstWhere(
-        (line) => _looksLikeMeetingLine(line, timeAnchors),
-        orElse: () => block.lines.first,
-      );
+      final titleLine = _bestTitleLine(block.lines, timeAnchors);
       final title = _cleanMeetingTitle(titleLine.text);
       if (title.isEmpty || _looksLikeNonEventLine(title)) {
         continue;
@@ -456,6 +582,39 @@ class ScreenshotAnalyzer {
     }
 
     return _deduplicateCandidates(candidates);
+  }
+
+  _TextLineInfo _bestTitleLine(
+    List<_TextLineInfo> lines,
+    List<_TimeAnchor> timeAnchors,
+  ) {
+    final titleLines = lines
+        .where((line) => _looksLikeMeetingLine(line, timeAnchors))
+        .toList();
+    if (titleLines.isEmpty) {
+      return lines.first;
+    }
+
+    titleLines.sort((a, b) {
+      return _titleScore(_cleanMeetingTitle(b.text))
+          .compareTo(_titleScore(_cleanMeetingTitle(a.text)));
+    });
+    return titleLines.first;
+  }
+
+  int _titleScore(String title) {
+    final normalized = title.toLowerCase();
+    var score = min(title.length, 80);
+    if (_strongTitleWordPattern().hasMatch(normalized)) {
+      score += 40;
+    }
+    if (RegExp(r'^\d').hasMatch(normalized)) {
+      score -= 20;
+    }
+    if (RegExp(r'[/\\:_]').hasMatch(normalized)) {
+      score -= 15;
+    }
+    return score;
   }
 
   DateTime _inferStartTime({
@@ -944,9 +1103,6 @@ class ScreenshotAnalyzer {
     if (_looksLikeDurationLabel(text)) {
       return false;
     }
-    if (_looksLikeBadOcrTitle(text)) {
-      return false;
-    }
     if (!RegExp(r'[a-zA-Z]').hasMatch(text)) {
       return false;
     }
@@ -985,8 +1141,7 @@ class ScreenshotAnalyzer {
   bool _looksLikeNonEventLine(String text) {
     return _looksLikeHeaderOrTime(text) ||
         _looksLikeCalendarHeader(text) ||
-        _looksLikeDurationLabel(text) ||
-        _looksLikeBadOcrTitle(text);
+        _looksLikeDurationLabel(text);
   }
 
   bool _looksLikeCalendarHeader(String text) {
@@ -1056,38 +1211,6 @@ class ScreenshotAnalyzer {
     return _normalizeCommonOcrWords(cleaned);
   }
 
-  bool _looksLikeBadOcrTitle(String text) {
-    final normalized = text.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return true;
-    }
-
-    if (RegExp(r'^(asopm|a?so\s?p?m)$').hasMatch(normalized)) {
-      return true;
-    }
-
-    if (RegExp(r'^(a?toah|atoah|hannah|hanan)\s+[a-z]+$')
-        .hasMatch(normalized)) {
-      return true;
-    }
-
-    if (_fuzzyMicrosoftWordPattern().hasMatch(normalized)) {
-      return true;
-    }
-
-    final letters = RegExp(r'[a-z]').allMatches(normalized).length;
-    final separators = RegExp(r'[/\\:_]').allMatches(normalized).length;
-    final vowels = RegExp(r'[aeiou]').allMatches(normalized).length;
-    if (letters >= 5 && vowels <= 1) {
-      return true;
-    }
-    if (separators >= 2 && !_strongMeetingWordPattern().hasMatch(normalized)) {
-      return true;
-    }
-
-    return false;
-  }
-
   bool _looksLikeHeaderOrTime(String text) {
     final trimmed = text.trim();
     if (trimmed.length <= 2) {
@@ -1123,13 +1246,6 @@ class ScreenshotAnalyzer {
     );
   }
 
-  RegExp _fuzzyMicrosoftWordPattern() {
-    return RegExp(
-      r'\b(microsoft\s+teams?|microsoft|microso[l1]|microst|mierosoft|microsol|teamal)\b',
-      caseSensitive: false,
-    );
-  }
-
   RegExp _fuzzyUrlSuffixPattern() {
     return RegExp(
       r'\b(h?t?t?p?s?|hps|tps|ttps|titps|itps)[/:;][^\s]*.*$',
@@ -1137,9 +1253,9 @@ class ScreenshotAnalyzer {
     );
   }
 
-  RegExp _strongMeetingWordPattern() {
+  RegExp _strongTitleWordPattern() {
     return RegExp(
-      r'\b(meeting|stand[- ]?up|review|discussion|sync|touch|base|check[- ]?in|office|hours|board|deck|weekly|daily|okr|sourcing|legal|coreops)\b',
+      r'\b(meeting|stand[- ]?up|review|discussion|sync|touch|base|check[- ]?in|office|hours|board|deck|weekly|daily|okr|sourcing|legal|coreops|workshop|tracker)\b',
       caseSensitive: false,
     );
   }

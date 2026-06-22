@@ -6,6 +6,7 @@ import '../data/repositories/settings_repository.dart';
 import '../reminders/reminder_scheduler.dart';
 import '../theme/app_theme.dart';
 import '../ui/home_screen.dart';
+import '../ui/outlook_screen.dart';
 import '../ui/scan_screen.dart';
 import '../ui/settings_screen.dart';
 
@@ -93,6 +94,7 @@ class _AppShellState extends State<AppShell> {
                 onSaveMeeting: widget.appState.saveMeeting,
                 onDeleteMeeting: widget.appState.deleteMeeting,
               ),
+              OutlookScreen(appState: widget.appState),
               ScanScreen(appState: widget.appState),
               SettingsScreen(appState: widget.appState),
             ],
@@ -109,6 +111,11 @@ class _AppShellState extends State<AppShell> {
                 icon: Icon(Icons.home_outlined),
                 selectedIcon: Icon(Icons.home),
                 label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.event_available_outlined),
+                selectedIcon: Icon(Icons.event_available),
+                label: 'Outlook',
               ),
               NavigationDestination(
                 icon: Icon(Icons.add_a_photo_outlined),
@@ -130,6 +137,7 @@ class _AppShellState extends State<AppShell> {
 
 enum AppScreen {
   home('Saved meeting reminders will appear here.'),
+  outlook('Sign in to read real Outlook calendar events.'),
   scan('Pick an Outlook week screenshot to inspect.'),
   settings('Configure how reminders should behave.');
 

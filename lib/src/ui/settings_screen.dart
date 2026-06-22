@@ -47,6 +47,91 @@ class SettingsScreen extends StatelessWidget {
             }).toList(),
           ),
         ),
+        const SizedBox(height: 24),
+        _SettingsSection(
+          title: 'Microsoft Graph',
+          child: _MicrosoftClientIdField(appState: appState),
+        ),
+      ],
+    );
+  }
+}
+
+class _MicrosoftClientIdField extends StatefulWidget {
+  const _MicrosoftClientIdField({required this.appState});
+
+  final AppState appState;
+
+  @override
+  State<_MicrosoftClientIdField> createState() =>
+      _MicrosoftClientIdFieldState();
+}
+
+class _MicrosoftClientIdFieldState extends State<_MicrosoftClientIdField> {
+  late final TextEditingController controller;
+  var isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(
+      text: widget.appState.settings.microsoftClientId,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _MicrosoftClientIdField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentValue = widget.appState.settings.microsoftClientId;
+    if (controller.text != currentValue && !isSaving) {
+      controller.text = currentValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    setState(() {
+      isSaving = true;
+    });
+    await widget.appState.setMicrosoftClientId(controller.text);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      isSaving = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Microsoft client ID saved.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Azure Application client ID',
+            helperText:
+                'Redirect URI: msauth://com.example.snap_reminder/iwckoFi05XXx3Da9T1NHxfqglac=',
+          ),
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => save(),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: isSaving ? null : save,
+          icon: const Icon(Icons.save_outlined),
+          label: Text(isSaving ? 'Saving...' : 'Save client ID'),
+        ),
       ],
     );
   }

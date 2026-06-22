@@ -48,14 +48,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveMeeting(ImportantMeeting meeting) async {
+  Future<void> setMicrosoftClientId(String clientId) async {
+    settings = await settingsRepository.save(
+      settings.copyWith(microsoftClientId: clientId.trim()),
+    );
+    notifyListeners();
+  }
+
+  Future<ImportantMeeting> saveMeeting(ImportantMeeting meeting) async {
     final id = await meetingRepository.save(meeting);
+    final savedMeeting = meeting.copyWith(id: id);
     await reminderScheduler.scheduleMeeting(
-      meeting: meeting.copyWith(id: id),
+      meeting: savedMeeting,
       alarmBehavior: settings.alarmBehavior,
     );
     upcomingMeetings = await meetingRepository.loadUpcoming();
     notifyListeners();
+    return savedMeeting;
   }
 
   Future<void> saveMeetings(List<ImportantMeeting> meetings) async {

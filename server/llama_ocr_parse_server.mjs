@@ -263,9 +263,6 @@ function looksLikeNonMeetingText(value) {
   if (looksLikeDuration(text)) {
     return true;
   }
-  if (looksLikeBadOcrTitle(text)) {
-    return true;
-  }
   if (/^([01]?\d|2[0-3])(?::[0-5]\d)?\s*(am|pm)?$/.test(text)) {
     return true;
   }
@@ -293,43 +290,8 @@ function fuzzyMeetingPlatformSuffixPattern() {
   return /\b(microsoft\s+teams?|microsoft|microso[l1]|microst|mierosoft|microsol|teamal|zoom|zoo?m)\b.*$/i;
 }
 
-function fuzzyMicrosoftWordPattern() {
-  return /\b(microsoft\s+teams?|microsoft|microso[l1]|microst|mierosoft|microsol|teamal)\b/i;
-}
-
 function fuzzyUrlSuffixPattern() {
   return /\b(h?t?t?p?s?|hps|tps|ttps|titps|itps)[/:;][^\s]*.*$/i;
-}
-
-function strongMeetingWordPattern() {
-  return /\b(meeting|stand[- ]?up|review|discussion|sync|touch|base|check[- ]?in|office|hours|board|deck|weekly|daily|okr|sourcing|legal|coreops)\b/i;
-}
-
-function looksLikeBadOcrTitle(value) {
-  const text = String(value || "").trim().toLowerCase();
-  if (!text) {
-    return true;
-  }
-  if (/^(asopm|a?so\s?p?m)$/.test(text)) {
-    return true;
-  }
-  if (/^(a?toah|atoah|hannah|hanan)\s+[a-z]+$/.test(text)) {
-    return true;
-  }
-  if (fuzzyMicrosoftWordPattern().test(text)) {
-    return true;
-  }
-
-  const letters = (text.match(/[a-z]/g) || []).length;
-  const separators = (text.match(/[\/\\:_]/g) || []).length;
-  const vowels = (text.match(/[aeiou]/g) || []).length;
-  if (letters >= 5 && vowels <= 1) {
-    return true;
-  }
-  if (separators >= 2 && !strongMeetingWordPattern().test(text)) {
-    return true;
-  }
-  return false;
 }
 
 function normalizeCommonOcrWords(value) {

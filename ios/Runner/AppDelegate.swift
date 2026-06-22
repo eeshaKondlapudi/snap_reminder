@@ -25,13 +25,19 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
-    let registrar = engineBridge.pluginRegistry.registrar(
+    guard let registrar = engineBridge.pluginRegistry.registrar(
       forPlugin: "SnapReminderDictationPlugin")
+    else {
+      return
+    }
     let channel = FlutterMethodChannel(
       name: dictationChannelName,
       binaryMessenger: registrar.messenger())
     dictationChannel = channel
-    channel.setMethodCallHandler { [weak self] call, result in
+    channel.setMethodCallHandler { [weak self] (
+      call: FlutterMethodCall,
+      result: @escaping FlutterResult
+    ) in
       guard call.method == "listen" else {
         result(FlutterMethodNotImplemented)
         return
