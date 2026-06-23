@@ -7,7 +7,7 @@ import '../reminders/reminder_scheduler.dart';
 import '../theme/app_theme.dart';
 import '../ui/home_screen.dart';
 import '../ui/outlook_screen.dart';
-import '../ui/scan_screen.dart';
+// import '../ui/scan_screen.dart';
 import '../ui/settings_screen.dart';
 
 class SnapReminderApp extends StatefulWidget {
@@ -58,6 +58,13 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  static const activeScreens = [
+    AppScreen.home,
+    AppScreen.outlook,
+    // AppScreen.scan,
+    AppScreen.settings,
+  ];
+
   var selectedIndex = 0;
 
   @override
@@ -65,7 +72,7 @@ class _AppShellState extends State<AppShell> {
     return AnimatedBuilder(
       animation: widget.appState,
       builder: (context, _) {
-        final screen = AppScreen.values[selectedIndex];
+        final screen = activeScreens[selectedIndex];
 
         return Scaffold(
           appBar: AppBar(
@@ -95,7 +102,7 @@ class _AppShellState extends State<AppShell> {
                 onDeleteMeeting: widget.appState.deleteMeeting,
               ),
               OutlookScreen(appState: widget.appState),
-              ScanScreen(appState: widget.appState),
+              // ScanScreen(appState: widget.appState),
               SettingsScreen(appState: widget.appState),
             ],
           ),
@@ -117,11 +124,11 @@ class _AppShellState extends State<AppShell> {
                 selectedIcon: Icon(Icons.event_available),
                 label: 'Outlook',
               ),
-              NavigationDestination(
-                icon: Icon(Icons.add_a_photo_outlined),
-                selectedIcon: Icon(Icons.add_a_photo),
-                label: 'Scan',
-              ),
+              // NavigationDestination(
+              //   icon: Icon(Icons.add_a_photo_outlined),
+              //   selectedIcon: Icon(Icons.add_a_photo),
+              //   label: 'Scan',
+              // ),
               NavigationDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings),
@@ -138,7 +145,7 @@ class _AppShellState extends State<AppShell> {
 enum AppScreen {
   home('Saved meeting reminders will appear here.'),
   outlook('Sign in to read real Outlook calendar events.'),
-  scan('Pick an Outlook week screenshot to inspect.'),
+  // scan('Pick an Outlook week screenshot to inspect.'),
   settings('Configure how reminders should behave.');
 
   const AppScreen(this.subtitle);

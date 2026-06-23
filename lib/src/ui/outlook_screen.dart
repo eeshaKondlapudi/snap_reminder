@@ -272,18 +272,18 @@ class _OutlookScreenState extends State<OutlookScreen> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: isLoading ? null : connectAndFetch,
-                  icon: isLoading
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.login),
-                  label: Text(isLoading ? 'Loading...' : 'Load Outlook week'),
-                ),
+                // const SizedBox(height: 12),
+                // FilledButton.icon(
+                //   onPressed: isLoading ? null : connectAndFetch,
+                //   icon: isLoading
+                //       ? const SizedBox(
+                //           height: 18,
+                //           width: 18,
+                //           child: CircularProgressIndicator(strokeWidth: 2),
+                //         )
+                //       : const Icon(Icons.login),
+                //   label: Text(isLoading ? 'Loading...' : 'Load Outlook week'),
+                // ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: sharedCalendarController,
