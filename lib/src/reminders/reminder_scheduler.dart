@@ -38,10 +38,36 @@ class ReminderScheduler {
       ),
     );
 
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    final androidNotifications =
+        _notifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidNotifications?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'meeting_reminder_alarms_v3',
+        'Meeting alarms',
+        description: 'Audible alarm reminders for important meetings.',
+        importance: Importance.max,
+        playSound: true,
+        sound: UriAndroidNotificationSound(
+          'content://settings/system/alarm_alert',
+        ),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    );
+    await androidNotifications?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'meeting_reminder_notifications_v2',
+        'Meeting notifications',
+        description: 'Standard reminders for important meetings.',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+      ),
+    );
+
+    await androidNotifications?.requestNotificationsPermission();
     _exactAlarmsAllowed = await _notifications
             .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>()
@@ -73,16 +99,29 @@ class ReminderScheduler {
       return;
     }
 
+    final usesAlarm = alarmBehavior != AlarmBehavior.notificationOnly;
     final androidDetails = AndroidNotificationDetails(
-      'meeting_reminders',
-      'Meeting reminders',
-      channelDescription: 'Reminders for important meetings from screenshots.',
+      usesAlarm
+          ? 'meeting_reminder_alarms_v3'
+          : 'meeting_reminder_notifications_v2',
+      usesAlarm ? 'Meeting alarms' : 'Meeting notifications',
+      channelDescription: usesAlarm
+          ? 'Audible alarm reminders for important meetings.'
+          : 'Standard reminders for important meetings.',
       importance: Importance.max,
       priority: Priority.high,
       category: AndroidNotificationCategory.alarm,
-      playSound: alarmBehavior != AlarmBehavior.notificationOnly,
+      playSound: true,
+      sound: usesAlarm
+          ? const UriAndroidNotificationSound(
+              'content://settings/system/alarm_alert',
+            )
+          : null,
       enableVibration: true,
-      fullScreenIntent: alarmBehavior != AlarmBehavior.notificationOnly,
+      fullScreenIntent: usesAlarm,
+      audioAttributesUsage: usesAlarm
+          ? AudioAttributesUsage.alarm
+          : AudioAttributesUsage.notification,
     );
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,

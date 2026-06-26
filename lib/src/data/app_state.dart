@@ -29,6 +29,7 @@ class AppState extends ChangeNotifier {
     await reminderScheduler.initialize();
     settings = await settingsRepository.load();
     upcomingMeetings = await meetingRepository.loadUpcoming();
+    await _rescheduleUpcomingMeetings();
 
     isLoading = false;
     notifyListeners();
@@ -45,6 +46,7 @@ class AppState extends ChangeNotifier {
     settings = await settingsRepository.save(
       settings.copyWith(alarmBehavior: behavior),
     );
+    await _rescheduleUpcomingMeetings();
     notifyListeners();
   }
 
@@ -83,5 +85,14 @@ class AppState extends ChangeNotifier {
     await meetingRepository.delete(id);
     upcomingMeetings = await meetingRepository.loadUpcoming();
     notifyListeners();
+  }
+
+  Future<void> _rescheduleUpcomingMeetings() async {
+    for (final meeting in upcomingMeetings) {
+      await reminderScheduler.scheduleMeeting(
+        meeting: meeting,
+        alarmBehavior: settings.alarmBehavior,
+      );
+    }
   }
 }
