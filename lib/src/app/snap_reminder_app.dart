@@ -57,7 +57,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   static const activeScreens = [
     AppScreen.home,
     AppScreen.outlook,
@@ -66,6 +66,48 @@ class _AppShellState extends State<AppShell> {
   ];
 
   var selectedIndex = 0;
+  int? _lastActiveAlarmMeetingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastActiveAlarmMeetingId = widget.appState.activeAlarmMeeting?.id;
+    WidgetsBinding.instance.addObserver(this);
+    widget.appState.addListener(_showActiveAlarm);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.appState.removeListener(_showActiveAlarm);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.appState.refreshUpcomingMeetings();
+    }
+  }
+
+  void _showActiveAlarm() {
+    final activeAlarmMeetingId = widget.appState.activeAlarmMeeting?.id;
+    if (activeAlarmMeetingId == null) {
+      _lastActiveAlarmMeetingId = null;
+      return;
+    }
+    if (activeAlarmMeetingId == _lastActiveAlarmMeetingId) {
+      return;
+    }
+
+    _lastActiveAlarmMeetingId = activeAlarmMeetingId;
+    if (selectedIndex == 0) {
+      return;
+    }
+    setState(() {
+      selectedIndex = 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +140,11 @@ class _AppShellState extends State<AppShell> {
             children: [
               HomeScreen(
                 meetings: widget.appState.upcomingMeetings,
+                activeAlarmMeeting: widget.appState.activeAlarmMeeting,
                 onSaveMeeting: widget.appState.saveMeeting,
                 onDeleteMeeting: widget.appState.deleteMeeting,
+                onSnoozeAlarm: widget.appState.snoozeActiveAlarm,
+                onDismissAlarm: widget.appState.dismissActiveAlarm,
               ),
               OutlookScreen(appState: widget.appState),
               // ScanScreen(appState: widget.appState),

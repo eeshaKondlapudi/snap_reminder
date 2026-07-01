@@ -23,6 +23,20 @@ class MeetingRepository {
     return rows.map(ImportantMeeting.fromMap).toList();
   }
 
+  Future<ImportantMeeting?> findById(int id) async {
+    final database = await _openDatabase();
+    final rows = await database.query(
+      _tableName,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return ImportantMeeting.fromMap(rows.first);
+  }
+
   Future<int> save(ImportantMeeting meeting) async {
     final database = await _openDatabase();
     return database.insert(

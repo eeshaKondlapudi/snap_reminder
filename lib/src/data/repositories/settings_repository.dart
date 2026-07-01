@@ -7,6 +7,8 @@ class SettingsRepository {
   static const _defaultOffsetKey = 'default_offset_minutes';
   static const _alarmBehaviorKey = 'alarm_behavior';
   static const _microsoftClientIdKey = 'microsoft_client_id';
+  static const _lastOutlookSharedCalendarLinkKey =
+      'last_outlook_shared_calendar_link';
 
   Future<ReminderSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -16,6 +18,8 @@ class SettingsRepository {
         preferences.getString(_alarmBehaviorKey),
       ),
       microsoftClientId: preferences.getString(_microsoftClientIdKey) ?? '',
+      lastOutlookSharedCalendarLink:
+          preferences.getString(_lastOutlookSharedCalendarLinkKey) ?? '',
     );
   }
 
@@ -29,6 +33,10 @@ class SettingsRepository {
     await preferences.setString(
       _microsoftClientIdKey,
       settings.microsoftClientId.trim(),
+    );
+    await preferences.setString(
+      _lastOutlookSharedCalendarLinkKey,
+      settings.lastOutlookSharedCalendarLink.trim(),
     );
     return settings;
   }

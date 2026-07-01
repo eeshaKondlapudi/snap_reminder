@@ -9,8 +9,11 @@ void main() {
         home: Scaffold(
           body: HomeScreen(
             meetings: const [],
+            activeAlarmMeeting: null,
             onSaveMeeting: (_) async {},
             onDeleteMeeting: (_) async {},
+            onSnoozeAlarm: () async {},
+            onDismissAlarm: () async {},
           ),
         ),
       ),

@@ -8,16 +8,22 @@ import '../voice/voice_reminder_parser.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.meetings,
+    required this.activeAlarmMeeting,
     required this.onSaveMeeting,
     required this.onDeleteMeeting,
+    required this.onSnoozeAlarm,
+    required this.onDismissAlarm,
     this.dictationService = const DictationService(),
     this.voiceReminderParser = const VoiceReminderParser(),
     super.key,
   });
 
   final List<ImportantMeeting> meetings;
+  final ImportantMeeting? activeAlarmMeeting;
   final Future<void> Function(ImportantMeeting meeting) onSaveMeeting;
   final Future<void> Function(ImportantMeeting meeting) onDeleteMeeting;
+  final Future<void> Function() onSnoozeAlarm;
+  final Future<void> Function() onDismissAlarm;
   final DictationService dictationService;
   final VoiceReminderParser voiceReminderParser;
 
@@ -38,7 +44,10 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 12),
             child: _MeetingCard(
               meeting: meeting,
+              isActiveAlarm: activeAlarmMeeting?.id == meeting.id,
               onDelete: onDeleteMeeting,
+              onSnoozeAlarm: onSnoozeAlarm,
+              onDismissAlarm: onDismissAlarm,
             ),
           ),
         ),
@@ -336,10 +345,19 @@ class _EmptyHome extends StatelessWidget {
 }
 
 class _MeetingCard extends StatelessWidget {
-  const _MeetingCard({required this.meeting, required this.onDelete});
+  const _MeetingCard({
+    required this.meeting,
+    required this.isActiveAlarm,
+    required this.onDelete,
+    required this.onSnoozeAlarm,
+    required this.onDismissAlarm,
+  });
 
   final ImportantMeeting meeting;
+  final bool isActiveAlarm;
   final Future<void> Function(ImportantMeeting meeting) onDelete;
+  final Future<void> Function() onSnoozeAlarm;
+  final Future<void> Function() onDismissAlarm;
 
   @override
   Widget build(BuildContext context) {
@@ -347,6 +365,7 @@ class _MeetingCard extends StatelessWidget {
     final formatter = DateFormat('EEE, MMM d | h:mm a');
 
     return Card(
+      color: isActiveAlarm ? theme.colorScheme.primaryContainer : null,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -380,12 +399,38 @@ class _MeetingCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Alarm ${meeting.reminderOffsetMinutes} minutes before',
+              isActiveAlarm
+                  ? 'Alarm ringing now'
+                  : 'Alarm ${meeting.reminderOffsetMinutes} minutes before',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.primary,
+                color: isActiveAlarm
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
+            if (isActiveAlarm) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _snooze(context),
+                      icon: const Icon(Icons.snooze),
+                      label: const Text('Snooze 5 min'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _dismiss(context),
+                      icon: const Icon(Icons.alarm_off),
+                      label: const Text('Dismiss'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -434,6 +479,44 @@ class _MeetingCard extends StatelessWidget {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not delete reminder: $error')),
+      );
+    }
+  }
+
+  Future<void> _snooze(BuildContext context) async {
+    try {
+      await onSnoozeAlarm();
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Snoozed ${meeting.title} for 5 minutes.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not snooze alarm: $error')),
+      );
+    }
+  }
+
+  Future<void> _dismiss(BuildContext context) async {
+    try {
+      await onDismissAlarm();
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Dismissed alarm for ${meeting.title}.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not dismiss alarm: $error')),
       );
     }
   }

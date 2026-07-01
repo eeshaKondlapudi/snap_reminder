@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -19,7 +21,8 @@ class OutlookScreen extends StatefulWidget {
   State<OutlookScreen> createState() => _OutlookScreenState();
 }
 
-class _OutlookScreenState extends State<OutlookScreen> {
+class _OutlookScreenState extends State<OutlookScreen>
+    with WidgetsBindingObserver {
   late final MicrosoftCalendarService calendarService =
       widget.calendarService ?? MicrosoftCalendarService();
   late final TextEditingController sharedCalendarController =
@@ -30,8 +33,46 @@ class _OutlookScreenState extends State<OutlookScreen> {
   var events = <OutlookCalendarEvent>[];
   var isLoading = false;
   String status = 'Connect Outlook to load calendar events directly.';
+  String _lastSyncedSharedCalendarLink = '';
 
-  Future<void> connectAndFetch() async {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.appState.addListener(_handleAppStateChanged);
+    _syncSavedSharedCalendarLink();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshLastUsedOutlook();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshLastUsedOutlook();
+    }
+  }
+
+  void _handleAppStateChanged() {
+    _syncSavedSharedCalendarLink();
+    if (!widget.appState.isLoading && events.isEmpty && !isLoading) {
+      unawaited(_refreshLastUsedOutlook());
+    }
+  }
+
+  void _syncSavedSharedCalendarLink() {
+    final savedLink =
+        widget.appState.settings.lastOutlookSharedCalendarLink.trim();
+    if (savedLink.isEmpty || savedLink == _lastSyncedSharedCalendarLink) {
+      return;
+    }
+    _lastSyncedSharedCalendarLink = savedLink;
+    if (sharedCalendarController.text.trim().isEmpty) {
+      sharedCalendarController.text = savedLink;
+    }
+  }
+
+  Future<void> connectAndFetch({bool autoRefresh = false}) async {
     if (isLoading) {
       return;
     }
@@ -46,7 +87,9 @@ class _OutlookScreenState extends State<OutlookScreen> {
 
     setState(() {
       isLoading = true;
-      status = 'Opening Microsoft sign-in...';
+      status = autoRefresh
+          ? 'Refreshing Outlook events...'
+          : 'Opening Microsoft sign-in...';
     });
 
     try {
@@ -60,7 +103,9 @@ class _OutlookScreenState extends State<OutlookScreen> {
       }
       setState(() {
         events = upcomingEvents;
-        status = 'Loaded ${events.length} Outlook event(s).';
+        status = autoRefresh
+            ? 'Refreshed ${events.length} Outlook event(s).'
+            : 'Loaded ${events.length} Outlook event(s).';
       });
     } on MicrosoftCalendarException catch (error) {
       if (!mounted) {
@@ -85,12 +130,13 @@ class _OutlookScreenState extends State<OutlookScreen> {
     }
   }
 
-  Future<void> loadSharedCalendar() async {
+  Future<void> loadSharedCalendar({bool autoRefresh = false}) async {
     if (isLoading) {
       return;
     }
 
-    final uri = Uri.tryParse(sharedCalendarController.text.trim());
+    final link = sharedCalendarController.text.trim();
+    final uri = Uri.tryParse(link);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
       setState(() {
         status = 'Paste a valid Outlook shared calendar link first.';
@@ -100,10 +146,13 @@ class _OutlookScreenState extends State<OutlookScreen> {
 
     setState(() {
       isLoading = true;
-      status = 'Loading shared calendar link...';
+      status = autoRefresh
+          ? 'Refreshing shared calendar...'
+          : 'Loading shared calendar link...';
     });
 
     try {
+      await widget.appState.setLastOutlookSharedCalendarLink(link);
       final fetchedEvents = await calendarService.fetchSharedCalendarWeek(
         calendarUri: uri,
         weekStart: weekStart,
@@ -114,7 +163,9 @@ class _OutlookScreenState extends State<OutlookScreen> {
       }
       setState(() {
         events = upcomingEvents;
-        status = 'Loaded ${events.length} shared calendar event(s).';
+        status = autoRefresh
+            ? 'Refreshed ${events.length} shared calendar event(s).'
+            : 'Loaded ${events.length} shared calendar event(s).';
       });
     } on MicrosoftCalendarException catch (error) {
       if (!mounted) {
@@ -189,20 +240,38 @@ class _OutlookScreenState extends State<OutlookScreen> {
       scheduledEvents.clear();
       status = 'Week changed. Load Outlook events again.';
     });
+    _refreshLastUsedOutlook();
   }
 
   List<OutlookCalendarEvent> _upcomingEvents(
     List<OutlookCalendarEvent> loadedEvents,
   ) {
     final now = DateTime.now();
-    return loadedEvents.where((event) => event.endsAt.isAfter(now)).toList()
+    return loadedEvents.where((event) => event.startsAt.isAfter(now)).toList()
       ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.appState.removeListener(_handleAppStateChanged);
     sharedCalendarController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshLastUsedOutlook() async {
+    if (!mounted || isLoading) {
+      return;
+    }
+    final sharedLink = sharedCalendarController.text.trim();
+    if (sharedLink.isNotEmpty) {
+      await loadSharedCalendar(autoRefresh: true);
+      return;
+    }
+    final clientId = widget.appState.settings.microsoftClientId.trim();
+    if (clientId.isNotEmpty && calendarService.hasValidToken) {
+      await connectAndFetch(autoRefresh: true);
+    }
   }
 
   @override
